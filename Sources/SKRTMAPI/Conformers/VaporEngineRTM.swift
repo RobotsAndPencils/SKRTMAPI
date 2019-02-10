@@ -23,11 +23,7 @@
 
 #if os(Linux)
 import Foundation
-import Sockets
-import HTTP
-import TLS
-import URI
-import WebSockets
+import WebSocket
 
 public class VaporEngineRTM: RTMWebSocket {
     public weak var delegate: RTMDelegate?
@@ -37,77 +33,39 @@ public class VaporEngineRTM: RTMWebSocket {
     private var websocket: WebSocket?
 
     public func connect(url: URL) {
-
-        let headers: [HeaderKey: String] = [:]
-        let protocols: [String]? = nil
         do {
-            let uri = try URI(url.absoluteString)
-            if uri.scheme.isSecure {
-                let tcp = try TCPInternetSocket(
-                    scheme: "https",
-                    hostname: uri.hostname,
-                    port: uri.port ?? 443
-                )
-                let stream = try TLS.InternetSocket(tcp, TLS.Context(.client))
-                try WebSocket.background(
-                    to: uri,
-                    using: stream,
-                    protocols: protocols,
-                    headers: headers,
-                    onConnect: didConnect
-                )
-            } else {
-                let stream = try TCPInternetSocket(
-                    scheme: "http",
-                    hostname: uri.hostname,
-                    port: uri.port ?? 80
-                )
-                try WebSocket.background(
-                    to: uri,
-                    using: stream,
-                    protocols: protocols,
-                    headers: headers,
-                    onConnect: didConnect
-                )
+            let worker = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            let scheme: HTTPScheme
+            switch url.scheme {
+                case "https"?: scheme = .https
+                case "ws"?: scheme = .ws
+                case "wss"?: scheme = .wss
+                default: scheme = .http
+            }
+            let websocket = try HTTPClient.webSocket(scheme: scheme, hostname: url.host!, port: url.port, path: url.path, on: worker).wait()
+            self.websocket = websocket
+
+            self.delegate?.didConnect()
+
+            websocket.onText { ws, text in
+                self.delegate?.receivedMessage(text)
+            }
+
+            websocket.onCloseCode { _ in
+                self.delegate?.disconnected()
             }
         } catch {
             print("Error connecting to \(url.absoluteString): \(error)")
         }
     }
 
-    func didConnect(websocket: WebSocket) throws {
-        self.websocket = websocket
-
-        self.delegate?.didConnect()
-
-        websocket.onText = { ws, text in
-            self.delegate?.receivedMessage(text)
-        }
-
-        websocket.onClose = { ws, _, _, close in
-            self.delegate?.disconnected()
-        }
-
-        websocket.onPing = { ws, data in
-            try ws.pong(data)
-        }
-
-        websocket.onPong = { ws, data in
-            try ws.ping(data)
-        }
-    }
-
     public func disconnect() {
-        do {
-            try self.websocket?.close()
-        } catch {
-            print("Error disconnecting from \(self.websocket.debugDescription): \(error)")
-        }
+        self.websocket?.close()
     }
 
     public func sendMessage(_ message: String) throws {
         guard let websocket = websocket else { throw SlackError.rtmConnectionError }
-        try websocket.send(message)
+        websocket.send(message)
     }
 }
 #endif

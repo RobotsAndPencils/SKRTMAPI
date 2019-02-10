@@ -19,8 +19,8 @@ var target: Target
 target = .target(name: "SKRTMAPI", dependencies: ["SKCore", "SKWebAPI", "Starscream"])
 dependency = .package(url: "https://github.com/daltoniam/Starscream", .upToNextMajor(from: "3.0.0"))
 #else
-target = .target(name: "SKRTMAPI", dependencies: ["SKCore", "SKWebAPI", "WebSockets", "HTTP", "URI"])
-dependency = .package(url: "https://github.com/vapor/engine", .upToNextMajor(from: "2.2.2"))
+target = .target(name: "SKRTMAPI", dependencies: ["SKCore", "SKWebAPI", "WebSocket"])
+dependency = .package(url: "https://github.com/vapor/websocket", .upToNextMajor(from: "1.1.0"))
 #endif
 package.dependencies.append(dependency)
 package.targets.append(target)
